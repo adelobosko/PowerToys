@@ -2,8 +2,6 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Windows.Foundation;
 
 namespace Microsoft.CmdPal.Core.Common.Services;
@@ -26,12 +24,4 @@ public interface IExtensionService
     void EnableExtension(string extensionUniqueId);
 
     void DisableExtension(string extensionUniqueId);
-
-    ///// <summary>
-    ///// Gets a boolean indicating whether the extension was disabled due to the corresponding Windows optional feature
-    ///// being absent from the machine or in an unknown state.
-    ///// </summary>
-    ///// <param name="extension">The out of proc extension object</param>
-    ///// <returns>True only if the extension was disabled. False otherwise.</returns>
-    // public Task<bool> DisableExtensionIfWindowsFeatureNotAvailable(IExtensionWrapper extension);
 }

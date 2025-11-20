@@ -135,7 +135,7 @@ public sealed partial class ShellPage : Microsoft.UI.Xaml.Controls.Page,
                 // If we can't go back then we must be at the top and thus escape again should quit.
                 WeakReferenceMessenger.Default.Send<DismissMessage>();
 
-                PowerToysTelemetry.Log.WriteEvent(new CmdPalDismissedOnEsc());
+                PowerToysTelemetry.Log.WriteEvent(new CmdPalDismissedOnEscEvent());
             }
         }
     }
@@ -159,7 +159,7 @@ public sealed partial class ShellPage : Microsoft.UI.Xaml.Controls.Page,
                 new AsyncNavigationRequest(message.Page, message.CancellationToken),
                 message.WithAnimation ? DefaultPageAnimation : _noAnimation);
 
-            PowerToysTelemetry.Log.WriteEvent(new OpenPage(RootFrame.BackStackDepth, message.Page.Id));
+            PowerToysTelemetry.Log.WriteEvent(new OpenPageEvent(RootFrame.BackStackDepth, message.Page.Id));
 
             if (!ViewModel.IsNested)
             {

@@ -4,22 +4,19 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Tracing;
-using Microsoft.CommandPalette.Extensions;
+using Microsoft.CmdPal.UI.Services.Telemetry;
 using Microsoft.PowerToys.Telemetry;
-using Microsoft.PowerToys.Telemetry.Events;
 
 namespace Microsoft.CmdPal.UI.Events;
 
 [EventData]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-public class CmdPalHotkeySummoned : EventBase, IEvent
+public class ColdLaunchEvent : TelemetryEventBase
 {
-    public bool Global { get; set; }
+    public override PartA_PrivTags PartA_PrivTags => PartA_PrivTags.ProductAndServiceUsage;
 
-    public CmdPalHotkeySummoned(bool global)
+    public ColdLaunchEvent()
     {
-        Global = global;
+        EventName = "CmdPal_ColdLaunch";
     }
-
-    public PartA_PrivTags PartA_PrivTags => PartA_PrivTags.ProductAndServiceUsage;
 }

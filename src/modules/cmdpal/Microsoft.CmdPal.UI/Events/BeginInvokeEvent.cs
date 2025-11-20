@@ -4,15 +4,19 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Tracing;
-using Microsoft.CommandPalette.Extensions;
+using Microsoft.CmdPal.UI.Services.Telemetry;
 using Microsoft.PowerToys.Telemetry;
-using Microsoft.PowerToys.Telemetry.Events;
 
 namespace Microsoft.CmdPal.UI.Events;
 
 [EventData]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-public class CmdPalDismissedOnLostFocus : EventBase, IEvent
+public class BeginInvokeEvent : TelemetryEventBase
 {
-    public PartA_PrivTags PartA_PrivTags => PartA_PrivTags.ProductAndServiceUsage;
+    public override PartA_PrivTags PartA_PrivTags => PartA_PrivTags.ProductAndServiceUsage;
+
+    public BeginInvokeEvent()
+    {
+        EventName = "CmdPal_BeginInvoke";
+    }
 }

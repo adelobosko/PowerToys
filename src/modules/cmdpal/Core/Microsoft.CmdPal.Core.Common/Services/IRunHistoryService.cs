@@ -23,12 +23,3 @@ public interface IRunHistoryService
     /// <param name="item">The run history item to add.</param>
     void AddRunHistoryItem(string item);
 }
-
-public interface ITelemetryService
-{
-    void LogRunQuery(string query, int resultCount, ulong durationMs);
-
-    void LogRunCommand(string command, bool asAdmin, bool success);
-
-    void LogOpenUri(string uri, bool isWeb, bool success);
-}

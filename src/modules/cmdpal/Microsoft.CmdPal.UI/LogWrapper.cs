@@ -2,40 +2,118 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using ManagedCommon;
-using Microsoft.CmdPal.Core.Common;
+using System.Globalization;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.CmdPal.UI;
 
-internal sealed class LogWrapper : ILogger
+internal class LogWrapper : ILogger
 {
-    public void LogError(string message, Exception ex, [System.Runtime.CompilerServices.CallerMemberName] string memberName = "", [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "", [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0)
+    private static readonly object _lock = new();
+    private static readonly AsyncLocal<Stack<object>> _scopes = new();
+    private static readonly LogLevel _minLevel = InitializeLevel();
+
+    private static LogLevel InitializeLevel()
     {
-        Logger.LogError(message, ex, memberName, sourceFilePath, sourceLineNumber);
+        var env = Environment.GetEnvironmentVariable("COMMANDPALETTE_LOG_LEVEL");
+        if (Enum.TryParse<LogLevel>(env, ignoreCase: true, out var level))
+        {
+            return level;
+        }
+#if DEBUG
+        return LogLevel.Debug;
+#else
+        return LogLevel.Information;
+#endif
     }
 
-    public void LogError(string message, [System.Runtime.CompilerServices.CallerMemberName] string memberName = "", [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "", [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0)
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull
     {
-        Logger.LogError(message, memberName, sourceFilePath, sourceLineNumber);
+        var stack = _scopes.Value;
+        if (stack is null)
+        {
+            stack = new Stack<object>();
+            _scopes.Value = stack;
+        }
+
+        stack.Push(state);
+        return new Scope(stack);
     }
 
-    public void LogWarning(string message, [System.Runtime.CompilerServices.CallerMemberName] string memberName = "", [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "", [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0)
+    public bool IsEnabled(LogLevel logLevel) => logLevel >= _minLevel && logLevel != LogLevel.None;
+
+    public void Log<TState>(
+        LogLevel logLevel,
+        EventId eventId,
+        TState state,
+        Exception? exception,
+        Func<TState, Exception?, string> formatter)
     {
-        Logger.LogWarning(message, memberName, sourceFilePath, sourceLineNumber);
+        if (!IsEnabled(logLevel))
+        {
+            return;
+        }
+
+        ArgumentNullException.ThrowIfNull(formatter);
+
+        var message = formatter(state, exception);
+        if (string.IsNullOrEmpty(message) && exception is null)
+        {
+            return; // Nothing to log.
+        }
+
+        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
+        var level = logLevel.ToString().ToUpperInvariant();
+
+        var scopeText = string.Empty;
+        var stack = _scopes.Value;
+        if (stack is not null && stack.Count > 0)
+        {
+            scopeText = $" [Scopes: {string.Join(" => ", stack.ToArray())}]";
+        }
+
+        var eventText = eventId.Id != 0 ? $" (EventId: {eventId.Id}/{eventId.Name})" : string.Empty;
+        var line = $"{timestamp} [{level}]{eventText}{scopeText} {message}";
+
+        lock (_lock)
+        {
+            if (logLevel >= LogLevel.Warning)
+            {
+                Console.Error.WriteLine(line);
+                if (exception is not null)
+                {
+                    Console.Error.WriteLine(exception);
+                }
+            }
+            else
+            {
+                Console.Out.WriteLine(line);
+                if (exception is not null)
+                {
+                    Console.Out.WriteLine(exception);
+                }
+            }
+        }
     }
 
-    public void LogInfo(string message, [System.Runtime.CompilerServices.CallerMemberName] string memberName = "", [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "", [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0)
+    private sealed class Scope : IDisposable
     {
-        Logger.LogInfo(message, memberName, sourceFilePath, sourceLineNumber);
-    }
+        private readonly Stack<object> _stack;
+        private bool _disposed;
 
-    public void LogDebug(string message, [System.Runtime.CompilerServices.CallerMemberName] string memberName = "", [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "", [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0)
-    {
-        Logger.LogDebug(message, memberName, sourceFilePath, sourceLineNumber);
-    }
+        public Scope(Stack<object> stack) => _stack = stack;
 
-    public void LogTrace([System.Runtime.CompilerServices.CallerMemberName] string memberName = "", [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "", [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0)
-    {
-        Logger.LogTrace(memberName, sourceFilePath, sourceLineNumber);
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+            if (_stack.Count > 0)
+            {
+                _stack.Pop();
+            }
+            _disposed = true;
+        }
     }
 }
+

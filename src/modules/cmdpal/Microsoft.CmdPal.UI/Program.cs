@@ -4,7 +4,33 @@
 
 using System.Runtime.InteropServices;
 using ManagedCommon;
+using Microsoft.CmdPal.Core.Common.Helpers;
+using Microsoft.CmdPal.Core.Common.Services;
+using Microsoft.CmdPal.Core.ViewModels;
+using Microsoft.CmdPal.Ext.Apps;
+using Microsoft.CmdPal.Ext.Bookmarks;
+using Microsoft.CmdPal.Ext.Calc;
+using Microsoft.CmdPal.Ext.ClipboardHistory;
+using Microsoft.CmdPal.Ext.Indexer;
+using Microsoft.CmdPal.Ext.Registry;
+using Microsoft.CmdPal.Ext.Shell;
+using Microsoft.CmdPal.Ext.System;
+using Microsoft.CmdPal.Ext.TimeDate;
+using Microsoft.CmdPal.Ext.WebSearch;
+using Microsoft.CmdPal.Ext.WindowsServices;
+using Microsoft.CmdPal.Ext.WindowsSettings;
+using Microsoft.CmdPal.Ext.WindowsTerminal;
+using Microsoft.CmdPal.Ext.WindowWalker;
+using Microsoft.CmdPal.Ext.WinGet;
 using Microsoft.CmdPal.UI.Events;
+using Microsoft.CmdPal.UI.Helpers;
+using Microsoft.CmdPal.UI.Services;
+using Microsoft.CmdPal.UI.Services.Telemetry;
+using Microsoft.CmdPal.UI.ViewModels;
+using Microsoft.CmdPal.UI.ViewModels.BuiltinCommands;
+using Microsoft.CmdPal.UI.ViewModels.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.PowerToys.Telemetry;
 using Microsoft.UI.Dispatching;
 using Microsoft.Windows.AppLifecycle;
@@ -18,10 +44,14 @@ namespace Microsoft.CmdPal.UI;
 // cribbed heavily from
 //
 // https://github.com/microsoft/WindowsAppSDK-Samples/tree/main/Samples/AppLifecycle/Instancing/cs2/cs-winui-packaged/CsWinUiDesktopInstancing
-internal sealed class Program
+internal sealed partial class Program
 {
+    private static readonly ETWTrace _etwTrace = new ETWTrace();
+    private static readonly GlobalErrorHandler _globalErrorHandler = new();
     private static DispatcherQueueSynchronizationContext? uiContext;
     private static App? app;
+    private static ILogger? _logger;
+    private static ITelemetryService? _telemetry;
 
     // LOAD BEARING
     //
@@ -36,6 +66,92 @@ internal sealed class Program
             // There's a GPO rule configured disabling CmdPal. Exit as soon as possible.
             return 0;
         }
+
+        ServiceCollection services = new();
+
+        // Root services
+        services.AddSingleton(TaskScheduler.FromCurrentSynchronizationContext());
+        services.AddSingleton<ILogger, LogWrapper>();
+
+        // Settings & state
+        var sm = SettingsModel.LoadSettings();
+        services.AddSingleton(sm);
+        var state = AppStateModel.LoadState();
+        services.AddSingleton(state);
+
+        // Services
+        services.AddSingleton<IRootPageService, PowerToysRootPageService>();
+        services.AddSingleton<IAppHostService, PowerToysAppHostService>();
+        services.AddSingleton<ITelemetryService, TelemetryService>();
+        services.AddSingleton<IRunHistoryService, RunHistoryService>();
+        services.AddSingleton<TopLevelCommandManager>();
+        services.AddSingleton<AliasManager>();
+        services.AddSingleton<HotkeyManager>();
+        services.AddSingleton<IExtensionService, ExtensionService>();
+        services.AddSingleton<TrayIconService>();
+
+        // Built-in Extensions
+        var allApps = new AllAppsCommandProvider();
+        var files = new IndexerCommandsProvider();
+        files.SuppressFallbackWhen(ShellCommandsProvider.SuppressFileFallbackIf);
+        services.AddSingleton<ICommandProvider>(allApps);
+
+        services.AddSingleton<ICommandProvider, ShellCommandsProvider>();
+        services.AddSingleton<ICommandProvider, CalculatorCommandProvider>();
+        services.AddSingleton<ICommandProvider>(files);
+        services.AddSingleton<ICommandProvider, BookmarksCommandProvider>(_ => BookmarksCommandProvider.CreateWithDefaultStore());
+
+        services.AddSingleton<ICommandProvider, WindowWalkerCommandsProvider>();
+        services.AddSingleton<ICommandProvider, WebSearchCommandsProvider>();
+        services.AddSingleton<ICommandProvider, ClipboardHistoryCommandsProvider>();
+
+        // GH #38440: Users might not have WinGet installed! Or they might have
+        // a ridiculously old version. Or might be running as admin.
+        // We shouldn't explode in the App ctor if we fail to instantiate an
+        // instance of PackageManager, which will happen in the static ctor
+        // for WinGetStatics
+        try
+        {
+            var winget = new WinGetExtensionCommandsProvider();
+            var callback = allApps.LookupApp;
+            winget.SetAllLookup(callback);
+            services.AddSingleton<ICommandProvider>(winget);
+        }
+        catch (Exception ex)
+        {
+            Log_FailureToLoadWinget(_logger!, ex);
+        }
+
+        services.AddSingleton<ICommandProvider, WindowsTerminalCommandsProvider>();
+        services.AddSingleton<ICommandProvider, WindowsSettingsCommandsProvider>();
+        services.AddSingleton<ICommandProvider, RegistryCommandsProvider>();
+        services.AddSingleton<ICommandProvider, WindowsServicesCommandsProvider>();
+        services.AddSingleton<ICommandProvider, BuiltInsCommandProvider>();
+        services.AddSingleton<ICommandProvider, TimeDateCommandsProvider>();
+        services.AddSingleton<ICommandProvider, SystemCommandExtensionProvider>();
+
+        // Extensions
+
+        // ViewModels
+        services.AddSingleton<ShellViewModel>();
+        services.AddSingleton<IPageViewModelFactoryService, CommandPalettePageViewModelFactory>();
+
+        // Views
+        // App & MainWindow are singletons to ensure only one instance of each exists.
+        // Other views can be Transient.
+        services.AddSingleton<App>();
+        services.AddSingleton<MainWindow>();
+
+        var serviceProvider = services.BuildServiceProvider();
+        _logger = serviceProvider.GetRequiredService<ILogger>();
+        _telemetry = serviceProvider.GetRequiredService<ITelemetryService>();
+
+        if (_logger is not null)
+        {
+            Log_StartingAt(_logger, DateTime.UtcNow);
+        }
+
+        _telemetry.WriteEvent(new CmdPalProcessStartedEvent());
 
         try
         {
@@ -65,7 +181,18 @@ internal sealed class Program
         }
 
         Logger.LogDebug($"Starting at {DateTime.UtcNow}");
-        PowerToysTelemetry.Log.WriteEvent(new CmdPalProcessStarted());
+        PowerToysTelemetry.Log.WriteEvent(new CmdPalProcessStartedEvent());
+
+        // Ensure types used in XAML are preserved for AOT compilation
+        TypePreservation.PreserveTypes();
+
+        NativeEventWaiter.WaitForEventLoop(
+            "Local\\PowerToysCmdPal-ExitEvent-eb73f6be-3f22-4b36-aee3-62924ba40bfd", () =>
+            {
+                _etwTrace?.Dispose();
+                app?.AppWindow?.Close();
+                Environment.Exit(0);
+            });
 
         WinRT.ComWrappersSupport.InitializeComWrappers();
         var isRedirect = DecideRedirection();
@@ -75,7 +202,11 @@ internal sealed class Program
             {
                 uiContext = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
                 SynchronizationContext.SetSynchronizationContext(uiContext);
-                app = new App();
+                app = serviceProvider.GetRequiredService<App>();
+
+#if !CMDPAL_DISABLE_GLOBAL_ERROR_HANDLER
+                _globalErrorHandler.Register(app);
+#endif
             });
         }
 
@@ -90,13 +221,13 @@ internal sealed class Program
 
         if (keyInstance.IsCurrent)
         {
-            PowerToysTelemetry.Log.WriteEvent(new ColdLaunch());
+            _telemetry?.WriteEvent(new ColdLaunchEvent());
             keyInstance.Activated += OnActivated;
         }
         else
         {
             isRedirect = true;
-            PowerToysTelemetry.Log.WriteEvent(new ReactivateInstance());
+            _telemetry?.WriteEvent(new ReactivateInstanceEvent());
             RedirectActivationTo(args, keyInstance);
         }
 
@@ -122,11 +253,11 @@ internal sealed class Program
             }
             catch (OperationCanceledException)
             {
-                Logger.LogError($"Failed to activate existing instance; timed out after {redirectTimeout}.");
+                Log_FailedToActivate(_logger!, redirectTimeout);
             }
             catch (Exception ex)
             {
-                Logger.LogError("Failed to activate existing instance", ex);
+                Log_ActivateError(_logger!, ex);
             }
             finally
             {
@@ -145,7 +276,7 @@ internal sealed class Program
     {
         // If we already have a form, display the message now.
         // Otherwise, add it to the collection for displaying later.
-        if (App.Current?.AppWindow is MainWindow mainWindow)
+        if (app?.AppWindow is MainWindow mainWindow)
         {
             // LOAD BEARING
             // This must be synchronous to ensure the method does not return
@@ -155,4 +286,16 @@ internal sealed class Program
             mainWindow.HandleLaunchNonUI(args);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to activate existing instance; timed out after {RedirectTimeout}.")]
+    private static partial void Log_FailedToActivate(ILogger logger, TimeSpan redirectTimeout);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to activate existing instance")]
+    private static partial void Log_ActivateError(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Couldn't load winget")]
+    private static partial void Log_FailureToLoadWinget(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Starting at {UtcNow}.")]
+    private static partial void Log_StartingAt(ILogger logger, DateTime utcNow);
 }

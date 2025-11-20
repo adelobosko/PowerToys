@@ -4,6 +4,4 @@
 
 namespace Microsoft.CmdPal.Core.ViewModels.Messages;
 
-public record ShowConfirmationMessage(Microsoft.CommandPalette.Extensions.IConfirmationArgs? Args)
-{
-}
+public record ShowConfirmationMessage(Microsoft.CommandPalette.Extensions.IConfirmationArgs? Args);

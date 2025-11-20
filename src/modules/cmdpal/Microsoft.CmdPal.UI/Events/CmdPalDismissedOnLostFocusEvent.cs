@@ -4,19 +4,14 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Tracing;
+using Microsoft.CmdPal.UI.Services.Telemetry;
 using Microsoft.PowerToys.Telemetry;
-using Microsoft.PowerToys.Telemetry.Events;
 
 namespace Microsoft.CmdPal.UI.Events;
 
 [EventData]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-public class ReactivateInstance : EventBase, IEvent
+public class CmdPalDismissedOnLostFocusEvent : TelemetryEventBase
 {
-    public PartA_PrivTags PartA_PrivTags => PartA_PrivTags.ProductAndServiceUsage;
-
-    public ReactivateInstance()
-    {
-        EventName = "CmdPal_ReactivateInstance";
-    }
+    public override PartA_PrivTags PartA_PrivTags => PartA_PrivTags.ProductAndServiceUsage;
 }

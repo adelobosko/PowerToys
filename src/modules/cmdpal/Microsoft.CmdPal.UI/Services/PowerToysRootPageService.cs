@@ -15,7 +15,7 @@ using WinRT;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
-namespace Microsoft.CmdPal.UI;
+namespace Microsoft.CmdPal.UI.Services;
 
 internal sealed class PowerToysRootPageService : IRootPageService
 {
@@ -39,7 +39,7 @@ internal sealed class PowerToysRootPageService : IRootPageService
         await tlcManager.LoadBuiltinsAsync();
     }
 
-    public Microsoft.CommandPalette.Extensions.IPage GetRootPage()
+    public CommandPalette.Extensions.IPage GetRootPage()
     {
         return _mainListPage.Value;
     }

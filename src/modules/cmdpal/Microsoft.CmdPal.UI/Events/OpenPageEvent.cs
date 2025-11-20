@@ -4,15 +4,26 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Tracing;
-
+using Microsoft.CmdPal.UI.Services.Telemetry;
 using Microsoft.PowerToys.Telemetry;
-using Microsoft.PowerToys.Telemetry.Events;
 
 namespace Microsoft.CmdPal.UI.Events;
 
 [EventData]
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)]
-public class CmdPalDismissedOnEsc : EventBase, IEvent
+public class OpenPageEvent : TelemetryEventBase
 {
-    public PartA_PrivTags PartA_PrivTags => PartA_PrivTags.ProductAndServiceUsage;
+    public int PageDepth { get; set; }
+
+    public string Id { get; set; }
+
+    public OpenPageEvent(int pageDepth, string id)
+    {
+        PageDepth = pageDepth;
+        Id = id;
+
+        EventName = "CmdPal_OpenPage";
+    }
+
+    public override PartA_PrivTags PartA_PrivTags => PartA_PrivTags.ProductAndServiceUsage;
 }

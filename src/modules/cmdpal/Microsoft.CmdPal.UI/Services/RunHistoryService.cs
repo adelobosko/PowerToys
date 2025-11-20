@@ -5,7 +5,7 @@
 using Microsoft.CmdPal.Core.Common.Services;
 using Microsoft.CmdPal.UI.ViewModels;
 
-namespace Microsoft.CmdPal.UI;
+namespace Microsoft.CmdPal.UI.Services;
 
 internal sealed class RunHistoryService : IRunHistoryService
 {

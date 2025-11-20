@@ -4,6 +4,4 @@
 
 namespace Microsoft.CmdPal.Core.ViewModels.Messages;
 
-public record ShowToastMessage(string Message)
-{
-}
+public record ShowToastMessage(string Message);

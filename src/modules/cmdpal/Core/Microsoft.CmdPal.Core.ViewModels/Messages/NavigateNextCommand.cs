@@ -7,6 +7,4 @@ namespace Microsoft.CmdPal.Core.ViewModels.Commands;
 /// <summary>
 /// Used to navigate to the next command in the page when pressing the Down key in the SearchBox.
 /// </summary>
-public record NavigateNextCommand
-{
-}
+public record NavigateNextCommand;

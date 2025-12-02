@@ -185,7 +185,7 @@ public partial class SettingsViewModel : INotifyPropertyChanged
 
     private IEnumerable<CommandProviderWrapper> GetCommandProviders()
     {
-        var manager = _serviceProvider.GetService<TopLevelCommandManager>()!;
+        var manager = _serviceProvider.GetService<TopLevelCommandService>()!;
         var allProviders = manager.CommandProviders;
         return allProviders;
     }

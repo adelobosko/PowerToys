@@ -14,6 +14,7 @@ using Microsoft.CmdPal.Ext.Apps.Programs;
 using Microsoft.CmdPal.Ext.Apps.State;
 using Microsoft.CmdPal.UI.ViewModels.Messages;
 using Microsoft.CmdPal.UI.ViewModels.Properties;
+using Microsoft.CmdPal.UI.ViewModels.Services;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
@@ -38,9 +39,9 @@ public partial class MainListPage : DynamicListPage,
         "com.microsoft.cmdpal.builtin.remotedesktop",
     ];
 
-    private readonly TopLevelCommandManager _tlcManager;
+    private readonly TopLevelCommandService _tlcService;
     private readonly SettingsModel _settingsModel;
-    private readonly AliasManager _aliasManager;
+    private readonly AliasService _aliasService;
     private readonly AppStateModel _appStateModel;
     private List<Scored<IListItem>>? _filteredItems;
     private List<Scored<IListItem>>? _filteredApps;
@@ -55,18 +56,22 @@ public partial class MainListPage : DynamicListPage,
 
     private CancellationTokenSource? _cancellationTokenSource;
 
-    public MainListPage(TopLevelCommandManager topLevelCommandManager, SettingsModel settingsModel, AliasManager aliasManager, AppStateModel appStateModel)
+    public MainListPage(
+        TopLevelCommandService topLevelCommandService,
+        SettingsModel settingsModel,
+        AliasService aliasService,
+        AppStateModel appStateModel)
     {
         Title = Resources.builtin_home_name;
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.scale-200.png");
         PlaceholderText = Properties.Resources.builtin_main_list_page_searchbar_placeholder;
 
-        _aliasManager = aliasManager;
+        _aliasService = aliasService;
         _appStateModel = appStateModel;
 
-        _tlcManager = topLevelCommandManager;
-        _tlcManager.PropertyChanged += TlcManager_PropertyChanged;
-        _tlcManager.TopLevelCommands.CollectionChanged += Commands_CollectionChanged;
+        _tlcService = topLevelCommandService;
+        _tlcService.PropertyChanged += TlcManager_PropertyChanged;
+        _tlcService.TopLevelCommands.CollectionChanged += Commands_CollectionChanged;
 
         // The all apps page will kick off a BG thread to start loading apps.
         // We just want to know when it is done.
@@ -85,7 +90,7 @@ public partial class MainListPage : DynamicListPage,
         _settingsModel = settingsModel;
         _settingsModel.SettingsChanged += SettingsChangedHandler;
         HotReloadSettings(_settingsModel);
-        _includeApps = _tlcManager.IsProviderActive(AllAppsCommandProvider.WellKnownId);
+        _includeApps = _tlcService.IsProviderActive(AllAppsCommandProvider.WellKnownId);
 
         IsLoading = true;
     }
@@ -100,7 +105,7 @@ public partial class MainListPage : DynamicListPage,
 
     private void Commands_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        _includeApps = _tlcManager.IsProviderActive(AllAppsCommandProvider.WellKnownId);
+        _includeApps = _tlcService.IsProviderActive(AllAppsCommandProvider.WellKnownId);
         if (_includeApps != _filteredItemsIncludesApps)
         {
             ReapplySearchInBackground();
@@ -129,7 +134,7 @@ public partial class MainListPage : DynamicListPage,
             do
             {
                 _refreshRequested.Clear();
-                lock (_tlcManager.TopLevelCommands)
+                lock (_tlcService.TopLevelCommands)
                 {
                     if (_filteredItemsIncludesApps == _includeApps)
                     {
@@ -160,9 +165,9 @@ public partial class MainListPage : DynamicListPage,
     {
         if (string.IsNullOrEmpty(SearchText))
         {
-            lock (_tlcManager.TopLevelCommands)
+            lock (_tlcService.TopLevelCommands)
             {
-                return _tlcManager
+                return _tlcService
                     .TopLevelCommands
                     .Where(tlc => !string.IsNullOrEmpty(tlc.Title))
                     .ToArray();
@@ -170,7 +175,7 @@ public partial class MainListPage : DynamicListPage,
         }
         else
         {
-            lock (_tlcManager.TopLevelCommands)
+            lock (_tlcService.TopLevelCommands)
             {
                 var limitedApps = new List<Scored<IListItem>>();
 
@@ -228,11 +233,11 @@ public partial class MainListPage : DynamicListPage,
                 return;
             }
 
-            if (_aliasManager.CheckAlias(newSearch))
+            if (_aliasService.CheckAlias(newSearch))
             {
                 if (_filteredItemsIncludesApps != _includeApps)
                 {
-                    lock (_tlcManager.TopLevelCommands)
+                    lock (_tlcService.TopLevelCommands)
                     {
                         _filteredItemsIncludesApps = _includeApps;
                         ClearResults();
@@ -248,7 +253,7 @@ public partial class MainListPage : DynamicListPage,
             return;
         }
 
-        var commands = _tlcManager.TopLevelCommands;
+        var commands = _tlcService.TopLevelCommands;
         lock (commands)
         {
             if (token.IsCancellationRequested)
@@ -486,13 +491,13 @@ public partial class MainListPage : DynamicListPage,
     private bool ActuallyLoading()
     {
         var allApps = AllAppsCommandProvider.Page;
-        return allApps.IsLoading || _tlcManager.IsLoading;
+        return allApps.IsLoading || _tlcService.IsLoading;
     }
 
     // Almost verbatim ListHelpers.ScoreListItem, but also accounting for the
     // fact that we want fallback handlers down-weighted, so that they don't
     // _always_ show up first.
-    internal static int ScoreTopLevelItem(string query, IListItem topLevelOrAppItem, IRecentCommandsManager history)
+    internal static int ScoreTopLevelItem(string query, IListItem topLevelOrAppItem, IRecentCommandsService history)
     {
         var title = topLevelOrAppItem.Title;
         if (string.IsNullOrWhiteSpace(title))
@@ -601,7 +606,7 @@ public partial class MainListPage : DynamicListPage,
 
     public void Receive(ClearSearchMessage message) => SearchText = string.Empty;
 
-    public void Receive(UpdateFallbackItemsMessage message) => RaiseItemsChanged(_tlcManager.TopLevelCommands.Count);
+    public void Receive(UpdateFallbackItemsMessage message) => RaiseItemsChanged(_tlcService.TopLevelCommands.Count);
 
     private void SettingsChangedHandler(SettingsModel sender, object? args) => HotReloadSettings(sender);
 
@@ -612,8 +617,8 @@ public partial class MainListPage : DynamicListPage,
         _cancellationTokenSource?.Cancel();
         _cancellationTokenSource?.Dispose();
 
-        _tlcManager.PropertyChanged -= TlcManager_PropertyChanged;
-        _tlcManager.TopLevelCommands.CollectionChanged -= Commands_CollectionChanged;
+        _tlcService.PropertyChanged -= TlcManager_PropertyChanged;
+        _tlcService.TopLevelCommands.CollectionChanged -= Commands_CollectionChanged;
 
         if (_settingsModel is not null)
         {

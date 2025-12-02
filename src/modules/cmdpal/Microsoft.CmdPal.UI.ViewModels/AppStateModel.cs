@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ManagedCommon;
+using Microsoft.CmdPal.UI.ViewModels.Services;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using Windows.Foundation;
 
@@ -25,7 +26,7 @@ public partial class AppStateModel : ObservableObject
     // STATE HERE
     // Make sure that you make the setters public (JsonSerializer.Deserialize will fail silently otherwise)!
     // Make sure that any new types you add are added to JsonSerializationContext!
-    public RecentCommandsManager RecentCommands { get; set; } = new();
+    public RecentCommandsService RecentCommands { get; set; } = new();
 
     public List<string> RunHistory { get; set; } = [];
 

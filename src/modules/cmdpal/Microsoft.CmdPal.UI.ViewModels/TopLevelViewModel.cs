@@ -226,7 +226,7 @@ public sealed partial class TopLevelViewModel : ObservableObject, IListItem
             {
                 GenerateId();
 
-                FetchAliasFromAliasManager();
+                FetchAliasFromAliasService();
                 UpdateHotkey();
                 UpdateTags();
                 UpdateInitialIcon();
@@ -275,7 +275,7 @@ public sealed partial class TopLevelViewModel : ObservableObject, IListItem
         UpdateTags();
     }
 
-    private void FetchAliasFromAliasManager()
+    private void FetchAliasFromAliasService()
     {
         if (_aliasService is not null)
         {

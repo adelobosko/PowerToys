@@ -231,7 +231,7 @@ public sealed partial class CommandProviderWrapper
     private void CommandProvider_ItemsChanged(object sender, IItemsChangedEventArgs args) =>
 
         // We don't want to handle this ourselves - we want the
-        // TopLevelCommandManager to know about this, so they can remove
+        // TopLevelCommandService to know about this, so they can remove
         // our old commands from their own list.
         //
         // In handling this, a call will be made to `LoadTopLevelCommands` to

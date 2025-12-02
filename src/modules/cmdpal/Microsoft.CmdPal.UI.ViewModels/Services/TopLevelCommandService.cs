@@ -13,12 +13,11 @@ using Microsoft.CmdPal.Core.Common.Helpers;
 using Microsoft.CmdPal.Core.Common.Services;
 using Microsoft.CmdPal.Core.ViewModels;
 using Microsoft.CmdPal.UI.ViewModels.Messages;
-using Microsoft.CmdPal.UI.ViewModels.Services;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using Microsoft.Extensions.Logging;
 
-namespace Microsoft.CmdPal.UI.ViewModels.ViewModels;
+namespace Microsoft.CmdPal.UI.ViewModels.Services;
 
 public partial class TopLevelCommandService : ObservableObject,
     IRecipient<ReloadCommandsMessage>,
@@ -336,7 +335,7 @@ public partial class TopLevelCommandService : ObservableObject,
         try
         {
             await extension.StartExtensionAsync().WaitAsync(TimeSpan.FromSeconds(10));
-            return new CommandProviderWrapper(extension, _taskScheduler, logger, _aliasManager, _hotkeyManager);
+            return new CommandProviderWrapper(extension, _taskScheduler, logger, _aliasService, _hotkeyManager);
         }
         catch (Exception ex)
         {
@@ -430,7 +429,7 @@ public partial class TopLevelCommandService : ObservableObject,
 
     void IPageContext.ShowException(Exception ex, string? extensionHint)
     {
-        var message = DiagnosticsHelper.BuildExceptionMessage(ex, extensionHint ?? "TopLevelCommandManager");
+        var message = DiagnosticsHelper.BuildExceptionMessage(ex, extensionHint ?? "TopLevelCommandService");
         _commandPaletteHost.Log(message);
     }
 
